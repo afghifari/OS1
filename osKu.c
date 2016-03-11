@@ -11,75 +11,131 @@
 #include <sys/shm.h>
 #include <sys/stat.h>
 #include "PageTable.h"
-/*typedef struct {
-    int Valid;
-    int Frame;
-    int Dirty;
-    int Requested;
-    } page_table_entry;
 
-typedef page_table_entry* page_table_pointer;
-*/
+static int status = 0;
+
+//----Used for delayed tasks
+void ContinueHandler(int Signal) {
+//----Nothing to do
+}
+
+//----Used for receive SIGUSR2 signal
+void my_handler(int signum)
+{
+    if (signum == SIGUSR1)
+    {
+        status = 1;
+    }
+}
 
 int main(int  argc, char *argv[]){
-	page_table_pointer PageTable;
-	key_t ShmKEY;
-    int  ShmID;
-    int NumberOfPages;
+    int i;
     int SharedMemoryKey;
-    //struct Memory *ShmPTR;
+    int NumberOfPages;
+    int MMUPID;
+    int SegmentID;
+    page_table_pointer PageTable;
+    int frame;
+    int indeksFrame = 0;
+    boolean found = false;
 
-     if (argc != 3) {
-          printf("Ketikkan: %s #1 #2 \n", argv[0]);
-          exit(1);
-     }
-     
-    ShmKEY = ftok(".", 'x'); 
-    SharedMemoryKey = atoi(argv[argc-1]);
-	NumberOfPages = atoi(argv[1]);
-     //ShmID = shmget(ShmKEY, sizeof(page_table_entry), IPC_CREAT | 0666);
-     ShmID = shmget(SharedMemoryKey, NumberOfPages*sizeof(page_table_entry),IPC_CREAT | 0666);
-     if (ShmID < 0) {
-          printf("*** shmget error (server) ***\n");
-          exit(1);
-     }
-     //printf("Server has received a shared memory of four integers...\n");
-     
-     PageTable = (page_table_pointer) shmat(ShmID, NULL, 0);
-     if ((int) PageTable == -1) {
-          printf("*** shmat error (server) ***\n");
-          exit(1);
-     }
-     //printf("Server has attached the shared memory...\n");
-     printf("The shared memory key (PID) is %d\n",getpid());
-     printf("Initialized page table:\n");
+    if (argc != 3) {
+        printf("Type : %s #1 #2 \n", argv[0]);
+        exit(1);
+    }
+    
+    SharedMemoryKey = getpid();
+    NumberOfPages = atoi(argv[1]);
+    SegmentID = shmget(SharedMemoryKey, NumberOfPages*sizeof(page_table_entry),IPC_CREAT | 0666);
+    frame = atoi(argv[argc-1]);
 
-     PageTable[0].statusOS = NOT_READY;
-     PageTable[0].Valid=0;
-     PageTable[0].Frame=1;
-     PageTable[0].Dirty=0;
-     PageTable[0].Requested=0;
+    if (SegmentID < 0) {
+        perror("ERROR: Could not get page table (OS)");
+        exit(EXIT_FAILURE);
+    }
+    
+    /*Deklarasi untuk shmat() adalah void *shmat(int shmid,const void *shmaddr, int shmflg). 
+     Parameter shmid disini merupakan ID dari shared memory.
+     Parameter Shmaddr merupakan lokasi shared memory di main memory,
+     jika NULL akan dicarikan lokasi pada memory yang ingin ditempati.
+     Return value dari perintah ini adalah pointer ke lokasi shared memory.
+    */
+    PageTable = (page_table_pointer)shmat(SegmentID,NULL,0);
 
-     PageTable[1].statusOS = NOT_READY;
-     PageTable[1].Valid=0;
-     PageTable[1].Frame=1;
-     PageTable[1].Dirty=0;
-     PageTable[1].Requested=0;
+    if ((page_table_pointer) PageTable == NULL) {
+        printf("ERROR: Could not initialize continue handler (OS)\n");
+        exit(1);
+    }
 
-     PageTable[2].statusOS = NOT_READY;
-     PageTable[2].Valid=0;
-     PageTable[2].Frame=1;
-     PageTable[2].Dirty=0;
-     PageTable[2].Requested=0;
+    printf("The shared memory key (PID) is %d\n",getpid());
+    printf("Initialized page table:\n");
 
-     printf("Valid terinisialisasi\n");
-     PageTable[0].statusOS = FILLED;
-     PageTable[1].statusOS = FILLED;
-     PageTable[2].statusOS = FILLED;
-     printf("Please start the client in another window...\n");
+    for (i=0;i<NumberOfPages;i++){
+        PageTable[i].Valid=0;
+        PageTable[i].Frame=-1;
+        PageTable[i].Dirty=0;
+        PageTable[i].Requested=0;   
+    }
 
-     while (PageTable[0].statusOS != TAKEN)
-          sleep(1);
-      printf("Finish !\n");
+    printf("Please start the client in another window...\n");
+    PageTable[0].statusOS = NOT_READY;
+    
+    signal(SIGUSR1,my_handler);
+    while(PageTable[0].statusOS!=FINISH){
+        i=0;
+
+        while(!status){
+            sleep(1);
+        }
+
+        while(!found && PageTable[0].statusOS!=FINISH){
+            if (i>NumberOfPages)
+                i=0;
+            if (PageTable[i].Requested!=0)
+                found = true;
+            else
+                i++;
+        }
+        if(found){
+            MMUPID = PageTable[i].Requested;
+            printf("Process %d has requested page %d\n", PageTable[i].Requested, i);
+            PageTable[i].Requested=0;
+            if (indeksFrame<frame){
+                PageTable[i].Valid = 1;
+                PageTable[i].Frame = indeksFrame;
+                printf("put it in free frame %d\n",indeksFrame);
+                kill(MMUPID,SIGUSR2);
+                indeksFrame++;
+            }else{
+                int j=0;
+                while(PageTable[j].Dirty!=1){
+                    j++;
+                }
+                printf("Choose a victim page %d\n", j);
+                printf("Victim is dirty, write out\n");
+                PageTable[j].Dirty=1;
+                PageTable[j].Valid=0;
+                PageTable[j].Frame=-1;
+                PageTable[i].Valid=1;
+                indeksFrame=0;
+                printf("Put in victim's frame %d\n", indeksFrame);
+                PageTable[i].Frame = indeksFrame;
+                kill(MMUPID,SIGUSR2);
+            }
+            status=0;
+            printf("Unblock MMU\n");
+            found=false;
+        }
+        printf("-----------------------------------------------------------------\n");
+        sleep(1);
+    }
+    signal(SIGUSR1,my_handler);
+    while(!status){
+        sleep(1);
+    }
+    status=0;
+
+    printf("The MMU has finished !\n");
+
 	return 0;
 }

@@ -3,7 +3,10 @@
 
 #define  NOT_READY  -1
 #define  FILLED     0
-#define  TAKEN      1
+#define  FINISH     1
+#define true 1
+#define false 0
+#define boolean unsigned char
 
 //-----------------------------------------------------------------------------
 typedef struct {
@@ -13,7 +16,6 @@ typedef struct {
     int Dirty;
     int Requested;
 } page_table_entry;
-
 typedef page_table_entry* page_table_pointer;
 //-----------------------------------------------------------------------------
 

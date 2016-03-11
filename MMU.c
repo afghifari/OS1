@@ -12,6 +12,8 @@
 #include <sys/shm.h>
 #include <sys/stat.h>
 #include "PageTable.h"
+
+static int status = 0;
 //-----------------------------------------------------------------------------
 //----Used for delayed tasks
 void ContinueHandler(int Signal) {
@@ -24,14 +26,23 @@ void PrintPageTable(page_table_entry PageTable[],int NumberOfPages) {
 
     for (Index =  0;Index < NumberOfPages;Index++) {
         printf("%2d: Valid=%1d Frame=%2d Dirty=%1d Requested=%1d\n",Index,
-PageTable[Index].Valid,PageTable[Index].Frame,PageTable[Index].Dirty,
-PageTable[Index].Requested);
+        PageTable[Index].Valid,PageTable[Index].Frame,PageTable[Index].Dirty,
+        PageTable[Index].Requested);
     }
 
 }
 //-----------------------------------------------------------------------------
-int main(int argc,char *argv[]) {
 
+//----Used for receive SIGUSR2 signal
+void my_handler(int signum)
+{
+    if (signum == SIGUSR2)
+    {
+        status = 1;
+    }
+}
+//-----------------------------------------------------------------------------
+int main(int argc,char *argv[]) {
     int SharedMemoryKey;
     int NumberOfPages;
     int OSPID;
@@ -40,65 +51,62 @@ int main(int argc,char *argv[]) {
     int RSIndex;
     int Mode;
     int Page;
-    printf("argc = %d\n", argc);
-	printf("the SharedMemoryKey = %d\n",atoi(argv[argc-1]));
 
-	//** argv[1] adalah numberofpages
-    if (argc < 2 || (OSPID = SharedMemoryKey = atoi(argv[argc-1])) == 0  ||
-		(NumberOfPages = atoi(argv[1])) == 0) 
-    {
-        printf("Usage: \n");
+    if (argc < 2 || (OSPID = SharedMemoryKey = atoi(argv[argc-1])) == 0  || (NumberOfPages = atoi(argv[1])) == 0) {
+        printf("Usage:");
         exit(EXIT_FAILURE);
     }
-    printf("the SharedMemoryKey = %d\n",SharedMemoryKey);
 
-    //shmat();
-    //System call untuk mendaftarkan segment shared memory ke dalam data space dari suatu proses 
-//----Create the page table
+    //----Create the page table
+    //SegmentID = shmget(SharedMemoryKey, NumberOfPages*sizeof(page_table_entry),IPC_CREAT | 0666);
     if ((SegmentID = shmget(SharedMemoryKey, NumberOfPages*sizeof(page_table_entry),IPC_CREAT | 0666)) == -1 ||
-		(PageTable = (page_table_pointer)shmat(SegmentID,NULL,0)) == NULL) {
-        perror("ERROR: Could not get page table");
+        (PageTable = (page_table_pointer)shmat(SegmentID,NULL,0)) == NULL) {
+        perror("ERROR: Could not get page table (MMU)");
         exit(EXIT_FAILURE);
     }
 
-//----Handler for page fault
+    //----Handler for page fault
     if (signal(SIGCONT,ContinueHandler) == SIG_ERR) {
-        printf("ERROR: Could not initialize continue handler\n");
+        printf("ERROR: Could not initialize continue handler (MMU)\n");
         exit(EXIT_FAILURE);
     }
 
     printf("Initialized page table:\n");
     PrintPageTable(PageTable,NumberOfPages);
     printf("\n");
-//----Deal with the page requests
+    //----Deal with the page requests
     for (RSIndex = 2;RSIndex < argc-1;RSIndex++) {
         Mode = argv[RSIndex][0];
         Page = atoi(&argv[RSIndex][1]);
-//----Check that it's within the process
+        //----Check that it's within the process
         if (Page >= NumberOfPages) {
-            printf("ERROR: That page number in %c%d is outside the process\n",
-Mode,Page);
+            printf("ERROR: That page number in %c%d is outside the process\n", Mode,Page);
         } else {
             printf("Request for page %d in %c mode\n",Page,Mode);
-            PageTable[0].statusOS=TAKEN;
-//----Check if in memory
+            //PageTable[Page].Requested=getpid();
+            //----Check if in memory
             if (!PageTable[Page].Valid) {
                 printf("It's not in RAM - page fault\n");
-                PageTable[Page].Requested = getpid();
-//----Sleep a bit to allow OS to get ready for another signal
+                PageTable[Page].Requested=getpid();
+            //----Sleep a bit to allow OS to get ready for another signal
                 sleep(1);
                 if (kill(OSPID,SIGUSR1) == -1) {
                     perror("Kill to OS");
                     exit(EXIT_FAILURE);
                 }
-                pause();
+
+                signal(SIGUSR2,my_handler);
+                while(!status){
+                    sleep(1);
+                }
+                status=0;
                 if (!PageTable[Page].Valid) {
                     printf("Bugger, something wrong\n");
                 }
             } else {
                 printf("It's in RAM\n");
             }
-//----If write mode, set the dirty bit
+            //----If write mode, set the dirty bit
             if (Mode == 'W') {
                 printf("Set the dirty bit for page %d\n",Page);
                 PageTable[Page].Dirty = 1;
@@ -107,16 +115,18 @@ Mode,Page);
             printf("\n");
         }
     }
-
-//----Free the shared memory
+    //-- Give information to OS that I am finished
+    PageTable[0].statusOS=FINISH;
+    //----Free the shared memory
     if (shmdt(PageTable) == -1) {
         perror("ERROR: Error detaching segment");
         exit(EXIT_FAILURE);
     }
 
-//----Alert OS
+    //----Alert OS
     printf("Tell OS that I'm finished\n");
-//----Sleep a bit to allow OS to get ready for another signal
+    
+    //----Sleep a bit to allow OS to get ready for another signal
     sleep(1);
     if (kill(OSPID,SIGUSR1) == -1) {
         perror("Kill to OS");
