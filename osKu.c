@@ -13,6 +13,7 @@
 #include "PageTable.h"
 
 static int status = 0;
+int countDiskAccess = 0;
 
 //----Used for delayed tasks
 void ContinueHandler(int Signal) {
@@ -26,6 +27,16 @@ void my_handler(int signum)
     {
         status = 1;
     }
+}
+
+void addDiskAccessBy1(){
+	countDiskAccess++;
+}
+
+writeDiskAccesses(){
+    printf("%d disk acess",countDiskAccess);
+    if(countDiskAccess>1)printf("es ");
+    printf("required\n");
 }
 
 int main(int  argc, char *argv[]){
@@ -121,13 +132,16 @@ int main(int  argc, char *argv[]){
                 printf("Put in victim's frame %d\n", indeksFrame);
                 PageTable[i].Frame = indeksFrame;
                 kill(MMUPID,SIGUSR2);
+                countDiskAccess++;
             }
+            signal(SIGHUP, addDiskAccessBy1);
             status=0;
             printf("Unblock MMU\n");
             found=false;
         }
         printf("-----------------------------------------------------------------\n");
         sleep(1);
+
     }
     signal(SIGUSR1,my_handler);
     while(!status){
@@ -143,6 +157,6 @@ int main(int  argc, char *argv[]){
         PageTable[i].Valid,PageTable[i].Frame,PageTable[i].Dirty,
         PageTable[i].Requested);
     }
-
+    writeDiskAccesses();
 	return 0;
 }

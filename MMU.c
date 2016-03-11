@@ -103,6 +103,7 @@ int main(int argc,char *argv[]) {
                 if (!PageTable[Page].Valid) {
                     printf("Bugger, something wrong\n");
                 }
+                kill(OSPID,SIGHUP);
             } else {
                 printf("It's in RAM\n");
             }
