@@ -137,5 +137,12 @@ int main(int  argc, char *argv[]){
 
     printf("The MMU has finished !\n");
 
+    //print page table
+    for (i = 0; i < NumberOfPages; i++) {
+        printf("%2d: Valid=%1d Frame=%2d Dirty=%1d Requested=%1d\n",i,
+        PageTable[i].Valid,PageTable[i].Frame,PageTable[i].Dirty,
+        PageTable[i].Requested);
+    }
+
 	return 0;
 }
