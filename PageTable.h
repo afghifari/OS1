@@ -2,7 +2,6 @@
 #define PageTable_H
 
 #define  NOT_READY  -1
-#define  FILLED     0
 #define  FINISH     1
 #define true 1
 #define false 0

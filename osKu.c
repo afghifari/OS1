@@ -35,7 +35,8 @@ void addDiskAccessBy1(){
 
 writeDiskAccesses(){
     printf("%d disk acess",countDiskAccess);
-    if(countDiskAccess>1)printf("es ");
+    if(countDiskAccess>1)
+        printf("es ");
     printf("required\n");
 }
 
@@ -124,7 +125,7 @@ int main(int  argc, char *argv[]){
                 }
                 printf("Choose a victim page %d\n", j);
                 printf("Victim is dirty, write out\n");
-                PageTable[j].Dirty=1;
+                PageTable[j].Dirty=0;
                 PageTable[j].Valid=0;
                 PageTable[j].Frame=-1;
                 PageTable[i].Valid=1;
