@@ -36,8 +36,8 @@ void addDiskAccessBy1(){
 writeDiskAccesses(){
     printf("%d disk acess",countDiskAccess);
     if(countDiskAccess>1)
-        printf("es ");
-    printf("required\n");
+        printf("es");
+    printf(" required\n");
 }
 
 int main(int  argc, char *argv[]){
@@ -159,5 +159,11 @@ int main(int  argc, char *argv[]){
         PageTable[i].Requested);
     }
     writeDiskAccesses();
+
+    //----Free the shared memory
+    if (shmdt(PageTable) == -1) {
+        perror("ERROR: Error detaching segment");
+        exit(EXIT_FAILURE);
+    }
 	return 0;
 }
