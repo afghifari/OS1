@@ -13,7 +13,7 @@
 #include "PageTable.h"
 
 static int status = 0;
-int countDiskAccess = 0;
+int numberOfDiskAccess = 0;
 
 //----Used for delayed tasks
 void ContinueHandler(int Signal) {
@@ -30,14 +30,22 @@ void my_handler(int signum)
 }
 
 void addDiskAccessBy1(){
-	countDiskAccess++;
+	numberOfDiskAccess++;
 }
 
 writeDiskAccesses(){
-    printf("%d disk acess",countDiskAccess);
+    printf("%d disk acess",numberOfDiskAccess);
     if(countDiskAccess>1)
         printf("es");
     printf(" required\n");
+}
+
+printPageTable(){
+	for (i = 0; i < NumberOfPages; i++) {
+        printf("%2d: Valid=%1d Frame=%2d Dirty=%1d Requested=%1d\n",i,
+        PageTable[i].Valid,PageTable[i].Frame,PageTable[i].Dirty,
+        PageTable[i].Requested);
+    }
 }
 
 int main(int  argc, char *argv[]){
@@ -133,7 +141,7 @@ int main(int  argc, char *argv[]){
                 printf("Put in victim's frame %d\n", indeksFrame);
                 PageTable[i].Frame = indeksFrame;
                 kill(MMUPID,SIGUSR2);
-                countDiskAccess++;
+                numberOfDiskAccess++;
             }
             signal(SIGHUP, addDiskAccessBy1);
             status=0;
@@ -151,13 +159,8 @@ int main(int  argc, char *argv[]){
     status=0;
 
     printf("The MMU has finished !\n");
+    printPageTable();
 
-    //print page table
-    for (i = 0; i < NumberOfPages; i++) {
-        printf("%2d: Valid=%1d Frame=%2d Dirty=%1d Requested=%1d\n",i,
-        PageTable[i].Valid,PageTable[i].Frame,PageTable[i].Dirty,
-        PageTable[i].Requested);
-    }
     writeDiskAccesses();
 
     //----Free the shared memory
