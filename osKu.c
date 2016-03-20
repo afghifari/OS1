@@ -33,23 +33,28 @@ void addDiskAccessBy1(){
 	numberOfDiskAccess++;
 }
 
-writeDiskAccesses(){
+void writeDiskAccesses(){
     printf("%d disk acess",numberOfDiskAccess);
-    if(countDiskAccess>1)
+    if(numberOfDiskAccess>1)
         printf("es");
     printf(" required\n");
 }
 
-printPageTable(){
-	for (i = 0; i < NumberOfPages; i++) {
-        printf("%2d: Valid=%1d Frame=%2d Dirty=%1d Requested=%1d\n",i,
-        PageTable[i].Valid,PageTable[i].Frame,PageTable[i].Dirty,
-        PageTable[i].Requested);
+void PrintPageTable(page_table_entry PageTable[],int NumberOfPages) {
+
+    int Index;
+
+    for (Index =  0;Index < NumberOfPages;Index++) {
+        printf("%2d: Valid=%1d Frame=%2d Dirty=%1d Requested=%1d\n",Index,
+        PageTable[Index].Valid,PageTable[Index].Frame,PageTable[Index].Dirty,
+        PageTable[Index].Requested);
     }
+
 }
 
 int main(int  argc, char *argv[]){
-    int i;
+    int i, j, indeksLRU = 0;
+    int minimum;
     int SharedMemoryKey;
     int NumberOfPages;
     int MMUPID;
@@ -57,7 +62,7 @@ int main(int  argc, char *argv[]){
     page_table_pointer PageTable;
     int frame;
     int indeksFrame = 0;
-    boolean found = false;
+    boolean found = false, check;
 
     if (argc != 3) {
         printf("Type : %s #1 #2 \n", argv[0]);
@@ -67,7 +72,7 @@ int main(int  argc, char *argv[]){
     SharedMemoryKey = getpid();
     NumberOfPages = atoi(argv[1]);
     SegmentID = shmget(SharedMemoryKey, NumberOfPages*sizeof(page_table_entry),IPC_CREAT | 0666);
-    frame = atoi(argv[argc-1]);
+    frame = atoi(argv[argc-1]); // banyak frame
 
     if (SegmentID < 0) {
         perror("ERROR: Could not get page table (OS)");
@@ -91,13 +96,14 @@ int main(int  argc, char *argv[]){
     printf("Initialized page table:\n");
 
     for (i=0;i<NumberOfPages;i++){
+        PageTable[i].LRU=-1;
         PageTable[i].Valid=0;
         PageTable[i].Frame=-1;
         PageTable[i].Dirty=0;
-        PageTable[i].Requested=0;   
+        PageTable[i].Requested=0;
     }
 
-    printf("Please start the client in another window...\n");
+    printf("Please start the client in another window...\n\n");
     PageTable[0].statusOS = NOT_READY;
     
     signal(SIGUSR1,my_handler);
@@ -120,37 +126,60 @@ int main(int  argc, char *argv[]){
             MMUPID = PageTable[i].Requested;
             printf("Process %d has requested page %d\n", PageTable[i].Requested, i);
             PageTable[i].Requested=0;
-            if (indeksFrame<frame){
+            j=0;
+            check=false;
+
+            if (indeksFrame==frame){
+                check=true;
+            }
+            
+            if (!check){
                 PageTable[i].Valid = 1;
                 PageTable[i].Frame = indeksFrame;
+                PageTable[i].LRU = indeksLRU;
+                minimum = i;
                 printf("put it in free frame %d\n",indeksFrame);
                 kill(MMUPID,SIGUSR2);
                 indeksFrame++;
             }else{
-                int j=0;
-                while(PageTable[j].Dirty!=1){
+                j=0;
+                // algoritma pencarian LRU
+                while(j<NumberOfPages){
+                    if (PageTable[j].LRU>-1 && PageTable[j].Dirty==1){
+                        if (PageTable[j].LRU < PageTable[minimum].LRU)
+                    {        minimum=j;
+                        printf("minimum = %d \n", minimum);
+                    }
+                    }
                     j++;
                 }
-                printf("Choose a victim page %d\n", j);
+                /*while(PageTable[j].Dirty!=1){
+                    j++;
+                }*/
+                int victimsFrame;
+                printf("Choose a victim page %d\n", minimum);
                 printf("Victim is dirty, write out\n");
-                PageTable[j].Dirty=0;
-                PageTable[j].Valid=0;
-                PageTable[j].Frame=-1;
+                PageTable[minimum].Dirty=0;
+                PageTable[minimum].Valid=0;
+                victimsFrame = PageTable[minimum].Frame;
+                PageTable[minimum].Frame=-1;
                 PageTable[i].Valid=1;
-                indeksFrame=0;
-                printf("Put in victim's frame %d\n", indeksFrame);
-                PageTable[i].Frame = indeksFrame;
+                printf("Put in victim's frame %d\n", victimsFrame);
+                PageTable[i].Frame = victimsFrame;
+                PageTable[i].LRU = indeksLRU;
                 kill(MMUPID,SIGUSR2);
                 numberOfDiskAccess++;
             }
+            printf("LRU = %d\n",PageTable[i].LRU);
             signal(SIGHUP, addDiskAccessBy1);
             status=0;
+            indeksLRU++;
             printf("Unblock MMU\n");
+
             found=false;
         }
-        printf("-----------------------------------------------------------------\n");
         sleep(1);
-
+        printf("----------------------------------------------------\n");
     }
     signal(SIGUSR1,my_handler);
     while(!status){
@@ -159,7 +188,7 @@ int main(int  argc, char *argv[]){
     status=0;
 
     printf("The MMU has finished !\n");
-    printPageTable();
+    PrintPageTable(PageTable,NumberOfPages);
 
     writeDiskAccesses();
 
