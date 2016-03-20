@@ -13,7 +13,7 @@
 #include "PageTable.h"
 
 static int reqAvailable = 0;
-static int isContinue = 1;
+static int isLoop = 1;
 
 //----Used for delayed tasks
 void ContinueHandler(int Signal) {
@@ -33,7 +33,7 @@ void my_handler_SIGCONT(int signum)
 {
     if (signum == SIGCONT)
     {
-        isContinue = 0;
+        isLoop = 0;
     }
 }
 
@@ -117,12 +117,12 @@ int main(int argc, char *argv[]){
     
     signal(SIGUSR1,my_handler);
     signal(SIGCONT, my_handler_SIGCONT);
-    while(isContinue){
+    while(isLoop){
         while(!reqAvailable){
             sleep(1);
         }
 
-        while(!found && isContinue){
+        while(!found && isLoop){
             if (i>NumberOfPages)
                 i=0;
             if (PageTable[i].Requested!=0)
