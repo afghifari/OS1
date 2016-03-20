@@ -12,8 +12,8 @@
 #include <sys/stat.h>
 #include "PageTable.h"
 
-static int status = 0;
-static int statusSIGC = 1;
+static int reqAvailable = 0;
+static int isContinue = 1;
 
 //----Used for delayed tasks
 void ContinueHandler(int Signal) {
@@ -25,7 +25,7 @@ void my_handler(int signum)
 {
     if (signum == SIGUSR1)
     {
-        status = 1;
+        reqAvailable = 1;
     }
 }
 
@@ -33,7 +33,7 @@ void my_handler_SIGCONT(int signum)
 {
     if (signum == SIGCONT)
     {
-        statusSIGC = 0;
+        isContinue = 0;
     }
 }
 
@@ -54,7 +54,6 @@ void PrintPageTable(page_table_entry PageTable[],int NumberOfPages) {
         PageTable[Index].Valid,PageTable[Index].Frame,PageTable[Index].Dirty,
         PageTable[Index].Requested);
     }
-
 }
 
 void printUsage(char* argv[]){
@@ -118,14 +117,12 @@ int main(int argc, char *argv[]){
     
     signal(SIGUSR1,my_handler);
     signal(SIGCONT, my_handler_SIGCONT);
-    while(statusSIGC){
-        i=0;
-
-        while(!status){
+    while(isContinue){
+        while(!reqAvailable){
             sleep(1);
         }
 
-        while(!found && statusSIGC){
+        while(!found && isContinue){
             if (i>NumberOfPages)
                 i=0;
             if (PageTable[i].Requested!=0)
@@ -188,7 +185,7 @@ int main(int argc, char *argv[]){
                 PageTable[i].LRU = indeksLRU;
                 kill(MMUPID,SIGUSR2);
             }
-            status=0;
+            reqAvailable=0;
             indeksLRU++;
             found=false;
             numberOfDiskAccess++;
@@ -199,10 +196,10 @@ int main(int argc, char *argv[]){
     }
     
     signal(SIGUSR1,my_handler);
-    while(!status){
+    while(!reqAvailable){
         sleep(1);
     }
-    status=0;
+    reqAvailable=0;
 
     printf("The MMU has finished !\n");
     PrintPageTable(PageTable,NumberOfPages);
