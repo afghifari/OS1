@@ -1,4 +1,3 @@
-//-----------------------------------------------------------------------------
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -14,24 +13,22 @@
 #include "PageTable.h"
 
 static int status = 0;
-//-----------------------------------------------------------------------------
+
 //----Used for delayed tasks
 void ContinueHandler(int Signal) {
-//----Nothing to do
+    //----Nothing to do
 }
-//-----------------------------------------------------------------------------
+
 void PrintPageTable(page_table_entry PageTable[],int NumberOfPages) {
-
     int Index;
-
-    for (Index =  0;Index < NumberOfPages;Index++) {
+    for (Index =  0;Index < NumberOfPages;Index++)
+    {
         printf("%2d: Valid=%1d Frame=%2d Dirty=%1d Requested=%1d\n",Index,
         PageTable[Index].Valid,PageTable[Index].Frame,PageTable[Index].Dirty,
         PageTable[Index].Requested);
     }
 
 }
-//-----------------------------------------------------------------------------
 
 //----Used for receive SIGUSR2 signal
 void my_handler(int signum)
@@ -41,7 +38,7 @@ void my_handler(int signum)
         status = 1;
     }
 }
-//-----------------------------------------------------------------------------
+
 int main(int argc,char *argv[]) {
     int SharedMemoryKey;
     int NumberOfPages;
@@ -83,12 +80,12 @@ int main(int argc,char *argv[]) {
             printf("ERROR: That page number in %c%d is outside the process\n", Mode,Page);
         } else {
             printf("Request for page %d in %c mode\n",Page,Mode);
-            //PageTable[Page].Requested=getpid();
+            
             //----Check if in memory
             if (!PageTable[Page].Valid) {
                 printf("It's not in RAM - page fault\n");
                 PageTable[Page].Requested=getpid();
-            //----Sleep a bit to allow OS to get ready for another signal
+                //----Sleep a bit to allow OS to get ready for another signal
                 sleep(1);
                 if (kill(OSPID,SIGUSR1) == -1) {
                     perror("Kill to OS");
@@ -103,7 +100,6 @@ int main(int argc,char *argv[]) {
                 if (!PageTable[Page].Valid) {
                     printf("Bugger, something wrong\n");
                 }
-                kill(OSPID,SIGHUP);
             } else {
                 printf("It's in RAM\n");
             }
@@ -117,7 +113,8 @@ int main(int argc,char *argv[]) {
         }
     }
     //-- Give information to OS that I am finished
-    PageTable[0].statusOS=FINISH;
+    kill(OSPID,SIGCONT);
+    
     //----Free the shared memory
     if (shmdt(PageTable) == -1) {
         perror("ERROR: Error detaching segment");
@@ -136,4 +133,3 @@ int main(int argc,char *argv[]) {
 
     return(EXIT_SUCCESS);
 }
-//-----------------------------------------------------------------------------

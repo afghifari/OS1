@@ -1,14 +1,11 @@
 #ifndef PageTable_H
 #define PageTable_H
 
-#define NOT_READY  -1
-#define FINISH     1
 #define true 1
 #define false 0
 #define boolean unsigned char
 
 typedef struct {
-	int statusOS;
     int LRU;
     int Valid;
     int Frame;

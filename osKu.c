@@ -13,11 +13,12 @@
 #include "PageTable.h"
 
 static int status = 0;
+static int statusSIGC = 1;
 int numberOfDiskAccess = 0;
 
 //----Used for delayed tasks
 void ContinueHandler(int Signal) {
-//----Nothing to do
+    //----Nothing to do
 }
 
 //----Used for receive SIGUSR2 signal
@@ -29,22 +30,27 @@ void my_handler(int signum)
     }
 }
 
-void addDiskAccessBy1(){
-	numberOfDiskAccess++;
+void my_handler_SIGCONT(int signum)
+{
+    if (signum == SIGCONT)
+    {
+        statusSIGC = 0;
+    }
 }
 
 void writeDiskAccesses(){
     printf("%d disk acess",numberOfDiskAccess);
     if(numberOfDiskAccess>1)
+    {    
         printf("es");
+    }
     printf(" required\n");
 }
 
 void PrintPageTable(page_table_entry PageTable[],int NumberOfPages) {
-
     int Index;
-
-    for (Index =  0;Index < NumberOfPages;Index++) {
+    for (Index =  0;Index < NumberOfPages;Index++) 
+    {
         printf("%2d: Valid=%1d Frame=%2d Dirty=%1d Requested=%1d\n",Index,
         PageTable[Index].Valid,PageTable[Index].Frame,PageTable[Index].Dirty,
         PageTable[Index].Requested);
@@ -52,7 +58,7 @@ void PrintPageTable(page_table_entry PageTable[],int NumberOfPages) {
 
 }
 
-int main(int  argc, char *argv[]){
+int main(int argc, char *argv[]){
     int i, j, indeksLRU = 0;
     int minimum;
     int victimsFrame;
@@ -80,12 +86,6 @@ int main(int  argc, char *argv[]){
         exit(EXIT_FAILURE);
     }
     
-    /*Deklarasi untuk shmat() adalah void *shmat(int shmid,const void *shmaddr, int shmflg). 
-     Parameter shmid disini merupakan ID dari shared memory.
-     Parameter Shmaddr merupakan lokasi shared memory di main memory,
-     jika NULL akan dicarikan lokasi pada memory yang ingin ditempati.
-     Return value dari perintah ini adalah pointer ke lokasi shared memory.
-    */
     PageTable = (page_table_pointer)shmat(SegmentID,NULL,0);
 
     if ((page_table_pointer) PageTable == NULL) {
@@ -94,7 +94,7 @@ int main(int  argc, char *argv[]){
     }
 
     printf("The shared memory key (PID) is %d\n",getpid());
-    printf("Initialized page table:\n");
+    printf("Initialized page table :\n");
 
     for (i=0;i<NumberOfPages;i++){
         PageTable[i].LRU=-1;
@@ -105,17 +105,17 @@ int main(int  argc, char *argv[]){
     }
 
     printf("Please start the client in another window...\n\n");
-    PageTable[0].statusOS = NOT_READY;
     
     signal(SIGUSR1,my_handler);
-    while(PageTable[0].statusOS!=FINISH){
+    signal(SIGCONT, my_handler_SIGCONT);
+    while(statusSIGC){
         i=0;
 
         while(!status){
             sleep(1);
         }
 
-        while(!found && PageTable[0].statusOS!=FINISH){
+        while(!found && statusSIGC){
             if (i>NumberOfPages)
                 i=0;
             if (PageTable[i].Requested!=0)
@@ -123,13 +123,14 @@ int main(int  argc, char *argv[]){
             else
                 i++;
         }
+
         if(found){
             MMUPID = PageTable[i].Requested;
             printf("Process %d has requested page %d\n", PageTable[i].Requested, i);
             PageTable[i].Requested=0;
             j=0;
             check=false;
-
+            // to check the used of frame
             if (indeksFrame==frame){
                 check=true;
             }
@@ -144,38 +145,39 @@ int main(int  argc, char *argv[]){
                 indeksFrame++;
             }else{
                 j=0;
+                // this is the algoritma of LRU
                 while(j<NumberOfPages){
-                    if (PageTable[j].Frame>-1){
+                    if (PageTable[j].Frame>-1)
                         minimum=j;
-                    }
                     j++;
                 }
                 j=0;
                 while(j<NumberOfPages){
-                    if (PageTable[j].LRU>-1 && PageTable[j].Frame>-1){
+                    if (PageTable[j].LRU>-1 && PageTable[j].Frame>-1)
+                    {
                         if (PageTable[j].LRU < PageTable[minimum].LRU)
-                    {        
-                        minimum=j;
-                    }
+                            minimum=j;
                     }
                     j++;
                 }
-                
+                // end algoritma of LRU
                 printf("Choose a victim page %d\n", minimum);
-                printf("Victim is dirty, write out\n");
-                PageTable[minimum].Dirty=0;
+                
+                if (PageTable[minimum].Dirty==1){
+                    printf("Victim is dirty, write out\n");
+                    PageTable[minimum].Dirty=0;
+                    numberOfDiskAccess++;
+                }
                 PageTable[minimum].Valid=0;
                 victimsFrame = PageTable[minimum].Frame;
                 PageTable[minimum].Frame=-1;
-                PageTable[i].Valid=1;
                 printf("Put in victim's frame %d\n", victimsFrame);
+                PageTable[i].Valid=1;
                 PageTable[i].Frame = victimsFrame;
                 PageTable[i].LRU = indeksLRU;
                 kill(MMUPID,SIGUSR2);
-                numberOfDiskAccess++;
             }
-
-            signal(SIGHUP, addDiskAccessBy1);
+            numberOfDiskAccess++;
             status=0;
             indeksLRU++;
             found=false;
@@ -184,6 +186,7 @@ int main(int  argc, char *argv[]){
         sleep(1);
         printf("----------------------------------------------------\n");
     }
+    
     signal(SIGUSR1,my_handler);
     while(!status){
         sleep(1);
