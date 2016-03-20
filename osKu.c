@@ -55,6 +55,7 @@ void PrintPageTable(page_table_entry PageTable[],int NumberOfPages) {
 int main(int  argc, char *argv[]){
     int i, j, indeksLRU = 0;
     int minimum;
+    int victimsFrame;
     int SharedMemoryKey;
     int NumberOfPages;
     int MMUPID;
@@ -143,8 +144,6 @@ int main(int  argc, char *argv[]){
                 indeksFrame++;
             }else{
                 j=0;
-                // algoritma pencarian LRU // harusnya indeksnya bukan minimum woy,
-                // bikin algoritma nyari minimum yang bukan -1
                 while(j<NumberOfPages){
                     if (PageTable[j].Frame>-1){
                         minimum=j;
@@ -157,15 +156,11 @@ int main(int  argc, char *argv[]){
                         if (PageTable[j].LRU < PageTable[minimum].LRU)
                     {        
                         minimum=j;
-                        printf("minimum = %d \n", minimum);
                     }
                     }
                     j++;
                 }
-                /*while(PageTable[j].Dirty!=1){
-                    j++;
-                }*/
-                int victimsFrame;
+                
                 printf("Choose a victim page %d\n", minimum);
                 printf("Victim is dirty, write out\n");
                 PageTable[minimum].Dirty=0;
@@ -179,13 +174,12 @@ int main(int  argc, char *argv[]){
                 kill(MMUPID,SIGUSR2);
                 numberOfDiskAccess++;
             }
-            printf("LRU = %d\n",PageTable[i].LRU);
+
             signal(SIGHUP, addDiskAccessBy1);
             status=0;
             indeksLRU++;
-            printf("Unblock MMU\n");
-
             found=false;
+            printf("Unblock MMU\n");
         }
         sleep(1);
         printf("----------------------------------------------------\n");
