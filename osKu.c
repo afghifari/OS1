@@ -143,11 +143,20 @@ int main(int  argc, char *argv[]){
                 indeksFrame++;
             }else{
                 j=0;
-                // algoritma pencarian LRU
+                // algoritma pencarian LRU // harusnya indeksnya bukan minimum woy,
+                // bikin algoritma nyari minimum yang bukan -1
                 while(j<NumberOfPages){
-                    if (PageTable[j].LRU>-1 && PageTable[j].Dirty==1){
+                    if (PageTable[j].Frame>-1){
+                        minimum=j;
+                    }
+                    j++;
+                }
+                j=0;
+                while(j<NumberOfPages){
+                    if (PageTable[j].LRU>-1 && PageTable[j].Frame>-1){
                         if (PageTable[j].LRU < PageTable[minimum].LRU)
-                    {        minimum=j;
+                    {        
+                        minimum=j;
                         printf("minimum = %d \n", minimum);
                     }
                     }
