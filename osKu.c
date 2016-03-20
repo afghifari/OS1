@@ -14,7 +14,6 @@
 
 static int status = 0;
 static int statusSIGC = 1;
-int numberOfDiskAccess = 0;
 
 //----Used for delayed tasks
 void ContinueHandler(int Signal) {
@@ -38,9 +37,9 @@ void my_handler_SIGCONT(int signum)
     }
 }
 
-void writeDiskAccesses(){
-    printf("%d disk acess",numberOfDiskAccess);
-    if(numberOfDiskAccess>1)
+void writeDiskAccesses(int num){
+    printf("%d disk acess",num);
+    if(num>1)
     {    
         printf("es");
     }
@@ -58,6 +57,12 @@ void PrintPageTable(page_table_entry PageTable[],int NumberOfPages) {
 
 }
 
+void printUsage(char* argv[]){
+    printf("Usage : %s <nP> <nF> \n", argv[0]);
+    printf("<nP> = Number of Page\n");
+    printf("<nF> = Number of Frame\n");
+}
+
 int main(int argc, char *argv[]){
     int i, j, indeksLRU = 0;
     int minimum;
@@ -67,20 +72,25 @@ int main(int argc, char *argv[]){
     int MMUPID;
     int SegmentID;
     page_table_pointer PageTable;
-    int frame;
+    int nFrame;
     int indeksFrame = 0;
     boolean found = false, check;
+    int numberOfDiskAccess=0;
 
+
+    // validate input
     if (argc != 3) {
-        printf("Type : %s #1 #2 \n", argv[0]);
+        printUsage(argv);
         exit(1);
     }
     
+    // initialize variable
     SharedMemoryKey = getpid();
     NumberOfPages = atoi(argv[1]);
     SegmentID = shmget(SharedMemoryKey, NumberOfPages*sizeof(page_table_entry),IPC_CREAT | 0666);
-    frame = atoi(argv[argc-1]); // banyak frame
+    nFrame = atoi(argv[argc-1]); // banyak frame
 
+    // validate segmentID
     if (SegmentID < 0) {
         perror("ERROR: Could not get page table (OS)");
         exit(EXIT_FAILURE);
@@ -94,8 +104,8 @@ int main(int argc, char *argv[]){
     }
 
     printf("The shared memory key (PID) is %d\n",getpid());
-    printf("Initialized page table :\n");
-
+    
+    printf("Initialize page table :\n");
     for (i=0;i<NumberOfPages;i++){
         PageTable[i].LRU=-1;
         PageTable[i].Valid=0;
@@ -131,7 +141,7 @@ int main(int argc, char *argv[]){
             j=0;
             check=false;
             // to check the used of frame
-            if (indeksFrame==frame){
+            if (indeksFrame==nFrame){
                 check=true;
             }
             
@@ -165,6 +175,7 @@ int main(int argc, char *argv[]){
                 
                 if (PageTable[minimum].Dirty==1){
                     printf("Victim is dirty, write out\n");
+                    sleep(1);
                     PageTable[minimum].Dirty=0;
                     numberOfDiskAccess++;
                 }
@@ -177,10 +188,10 @@ int main(int argc, char *argv[]){
                 PageTable[i].LRU = indeksLRU;
                 kill(MMUPID,SIGUSR2);
             }
-            numberOfDiskAccess++;
             status=0;
             indeksLRU++;
             found=false;
+            numberOfDiskAccess++;
             printf("Unblock MMU\n");
         }
         sleep(1);
@@ -196,7 +207,7 @@ int main(int argc, char *argv[]){
     printf("The MMU has finished !\n");
     PrintPageTable(PageTable,NumberOfPages);
 
-    writeDiskAccesses();
+    writeDiskAccesses(numberOfDiskAccess);
 
     //----Free the shared memory
     if (shmdt(PageTable) == -1) {
